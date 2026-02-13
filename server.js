@@ -112,13 +112,15 @@ function scoreProducts(products, criteria) {
       if (topics.includes(word)) relevanceScore += 15;
     });
     
-    // Scoring weights
+    // Scoring weights (normalized to 0-100 scale)
     const votesScore = Math.min(votesCount / 10, 30); // Cap at 30
     const reviewScore = reviewsCount > 0 ? Math.min(reviewsCount * 2, 25) : 0;
     const ratingScore = reviewsRating > 0 ? reviewsRating * 5 : 0; // Assuming 1-5 scale
     const popularityBonus = votesCount > 500 ? 20 : votesCount > 200 ? 10 : 0;
     
-    const totalScore = votesScore + reviewScore + ratingScore + popularityBonus + relevanceScore;
+    const rawScore = votesScore + reviewScore + ratingScore + popularityBonus + relevanceScore;
+    // Normalize to 0-100 scale (max possible raw score is ~170)
+    const totalScore = Math.min((rawScore / 170) * 100, 100);
     
     return {
       ...product,

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Hunt Market Scanner - Discover Top Tools</title>
+    <title>Market Scanner - Discover Top Tools</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes fadeIn {
@@ -35,10 +35,10 @@
         <!-- Header -->
         <div class="text-center mb-12">
             <h1 class="text-5xl font-bold text-gray-900 mb-4">
-                🚀 Product Hunt Market Scanner
+                🚀 Market Scanner
             </h1>
             <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-                Discover the top 3 tools from Product Hunt based on community votes, ratings, and relevance
+                Discover the top 3 tools based on community votes, ratings, and relevance to your search
             </p>
         </div>
 
@@ -85,9 +85,16 @@
         <!-- Scoring Rationale Section -->
         <div class="mt-16 bg-white rounded-2xl shadow-xl p-8">
             <h2 class="text-2xl font-bold text-gray-900 mb-4">📊 How We Score Products</h2>
-            <p class="text-gray-600 mb-6">
-                Our algorithm analyzes multiple factors from Product Hunt to rank tools and provide you with the most relevant recommendations.
+            <p class="text-gray-600 mb-4">
+                Our algorithm analyzes multiple factors to rank tools and provide you with the most relevant recommendations.
             </p>
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
+                <p class="text-sm text-blue-900">
+                    <strong>📍 Data Source:</strong> All product data is sourced from <a href="https://www.producthunt.com" target="_blank" class="underline font-semibold">Product Hunt</a>, 
+                    a platform where tech enthusiasts discover and share new products. Rankings are based on community engagement, 
+                    user reviews, and relevance to your search criteria.
+                </p>
+            </div>
             
             <div class="grid md:grid-cols-2 gap-6">
                 <div class="bg-orange-50 p-5 rounded-lg border-l-4 border-orange-500">
@@ -131,9 +138,10 @@
             <div class="mt-6 bg-gray-100 p-5 rounded-lg">
                 <h3 class="font-bold text-gray-900 mb-2">🎯 Total Score Calculation</h3>
                 <p class="text-sm text-gray-700">
-                    <strong>Maximum Possible Score:</strong> ~170 points<br>
+                    <strong>Score Scale:</strong> 0-100 points (normalized)<br>
                     The algorithm prioritizes <strong>relevance</strong> to your search criteria while balancing community validation 
-                    (upvotes, reviews, ratings). Products with higher relevance scores and strong community backing rank higher.
+                    (upvotes, reviews, ratings). Products with higher relevance scores and strong community backing rank higher. 
+                    Raw scores are normalized to a 0-100 scale for easier comparison.
                 </p>
             </div>
 
@@ -234,7 +242,7 @@
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-2xl font-bold text-gray-900">${escapeHtml(result.name)}</h3>
                             <span class="bg-orange-100 text-orange-800 text-sm font-semibold px-3 py-1 rounded-full">
-                                Score: ${result.justification.score}
+                                Score: ${result.justification.score}/100
                             </span>
                         </div>
                         
