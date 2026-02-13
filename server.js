@@ -12,62 +12,87 @@ const PRODUCT_HUNT_API = 'https://api.producthunt.com/v2/api/graphql';
 app.use(express.json());
 app.use(express.static('public'));
 
-// Product Hunt GraphQL query
-async function searchProductHunt(criteria, category = null) {
+// Product Hunt GraphQL query with pagination
+async function searchProductHunt(criteria, category = null, maxProducts = 500) {
   // Build topic filter if category specified
   const topicFilter = category ? `, topic: "${category}"` : '';
   
-  const query = `
-    query {
-      posts(first: 150, order: VOTES${topicFilter}) {
-        edges {
-          node {
-            id
-            name
-            tagline
-            description
-            votesCount
-            url
-            website
-            thumbnail {
-              url
-            }
-            reviewsRating
-            reviewsCount
-          }
-        }
-      }
-    }
-  `;
-
+  let allPosts = [];
+  let hasNextPage = true;
+  let afterCursor = null;
+  
   try {
     console.log(`Querying Product Hunt for: ${criteria}${category ? ` in category: ${category}` : ''}`);
     
-    const response = await axios.post(
-      PRODUCT_HUNT_API,
-      { query },
-      {
-        headers: {
-          'Authorization': `Bearer ${PRODUCT_HUNT_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+    // Fetch products in batches of 150 (safe complexity limit)
+    while (hasNextPage && allPosts.length < maxProducts) {
+      const afterParam = afterCursor ? `, after: "${afterCursor}"` : '';
+      
+      const query = `
+        query {
+          posts(first: 150, order: VOTES${topicFilter}${afterParam}) {
+            edges {
+              cursor
+              node {
+                id
+                name
+                tagline
+                description
+                votesCount
+                url
+                website
+                thumbnail {
+                  url
+                }
+                reviewsRating
+                reviewsCount
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
         }
+      `;
+      
+      const response = await axios.post(
+        PRODUCT_HUNT_API,
+        { query },
+        {
+          headers: {
+            'Authorization': `Bearer ${PRODUCT_HUNT_TOKEN}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (response.data.errors) {
+        console.error('GraphQL errors:', response.data.errors);
+        throw new Error(response.data.errors[0].message);
       }
-    );
 
-    if (response.data.errors) {
-      console.error('GraphQL errors:', response.data.errors);
-      throw new Error(response.data.errors[0].message);
+      const postsData = response.data.data.posts;
+      const newPosts = postsData.edges.map(edge => edge.node);
+      allPosts = allPosts.concat(newPosts);
+      
+      hasNextPage = postsData.pageInfo.hasNextPage && allPosts.length < maxProducts;
+      afterCursor = postsData.pageInfo.endCursor;
+      
+      console.log(`Fetched ${newPosts.length} products (total: ${allPosts.length})`);
+      
+      // Stop if we got less than 150 (end of results)
+      if (newPosts.length < 150) break;
     }
-
-    const posts = response.data.data.posts.edges.map(edge => edge.node);
-    console.log(`Found ${posts.length} products from Product Hunt`);
+    
+    console.log(`Total products fetched: ${allPosts.length}`);
     
     // Filter by criteria relevance
     const criteriaLower = criteria.toLowerCase();
     const keywords = criteriaLower.split(' ').filter(w => w.length > 2);
     
-    const relevantPosts = posts.filter(post => {
+    const relevantPosts = allPosts.filter(post => {
       const searchText = `${post.name} ${post.tagline} ${post.description || ''}`.toLowerCase();
       return keywords.some(keyword => searchText.includes(keyword));
     });
@@ -181,35 +206,33 @@ function generateJustification(product, rank) {
 // API Endpoint
 app.post('/api/scan', async (req, res) => {
   try {
-    const { criteria, category, minReviews = 0, minRating = 0 } = req.body;
+    const { criteria, category, minRating = 0 } = req.body;
     
     if (!criteria || criteria.trim().length === 0) {
       return res.status(400).json({ error: 'Criteria is required' });
     }
 
-    console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''} [Min Reviews: ${minReviews}, Min Rating: ${minRating}]`);
+    console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''} [Min Rating: ${minRating}]`);
     
-    // Search Product Hunt
-    const allProducts = await searchProductHunt(criteria, category);
+    // Search Product Hunt (fetches up to 500 products via pagination)
+    const allProducts = await searchProductHunt(criteria, category, 500);
     
     if (allProducts.length === 0) {
       return res.json({ 
         results: [], 
-        message: 'No products found on Product Hunt. Try different keywords.' 
+        message: 'No products found on Product Hunt. Try different keywords or remove category filter.' 
       });
     }
 
-    // Apply quality filters
-    const filteredProducts = allProducts.filter(product => {
-      const reviewCount = product.reviewsCount || 0;
-      const rating = product.reviewsRating || 0;
-      return reviewCount >= minReviews && rating >= minRating;
-    });
+    // Apply rating filter
+    const filteredProducts = minRating > 0 
+      ? allProducts.filter(product => (product.reviewsRating || 0) >= minRating)
+      : allProducts;
 
     if (filteredProducts.length === 0) {
       return res.json({ 
         results: [], 
-        message: `No products found matching your quality criteria (${minReviews}+ reviews, ${minRating}+ rating). Try lowering the filters.` 
+        message: `No products found with ${minRating}+ star rating. Try lowering the rating filter.` 
       });
     }
 
