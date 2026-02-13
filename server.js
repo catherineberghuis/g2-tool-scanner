@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Product Hunt GraphQL query with pagination
-async function searchProductHunt(criteria, category = null, maxProducts = 300) {
+async function searchProductHunt(criteria, category = null, maxProducts = 200) {
   // Build topic filter if category specified
   const topicFilter = category ? `, topic: "${category}"` : '';
   
@@ -21,7 +21,7 @@ async function searchProductHunt(criteria, category = null, maxProducts = 300) {
   let hasNextPage = true;
   let afterCursor = null;
   let batchCount = 0;
-  const maxBatches = 15; // Max 15 batches of 20 = 300 products
+  const maxBatches = 10; // Max 10 batches of 20 = 200 products (safer for rate limits)
   
   try {
     console.log(`Querying Product Hunt for: ${criteria}${category ? ` in category: ${category}` : ''}`);
@@ -87,6 +87,11 @@ async function searchProductHunt(criteria, category = null, maxProducts = 300) {
       
       // Stop if no more products in this batch
       if (newPosts.length === 0) break;
+      
+      // Add delay between requests to avoid rate limiting (500ms)
+      if (hasNextPage && allPosts.length < maxProducts && batchCount < maxBatches) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
     
     console.log(`Total products fetched: ${allPosts.length} from ${batchCount} batches`);
@@ -119,6 +124,14 @@ async function searchProductHunt(criteria, category = null, maxProducts = 300) {
 
   } catch (error) {
     console.error('Product Hunt API error:', error.response?.data || error.message);
+    
+    // Check for rate limiting
+    if (error.response?.status === 429) {
+      const resetTime = error.response.headers['x-rate-limit-reset'];
+      const resetMinutes = resetTime ? Math.ceil(resetTime / 60) : 10;
+      throw new Error(`RATE_LIMIT:${resetMinutes}`);
+    }
+    
     throw error;
   }
 }
@@ -231,8 +244,8 @@ app.post('/api/scan', async (req, res) => {
 
     console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''} [Min Rating: ${minRating}]`);
     
-    // Search Product Hunt (fetches up to 300 products via pagination)
-    const allProducts = await searchProductHunt(criteria, category, 300);
+    // Search Product Hunt (fetches up to 200 products via pagination with rate limit protection)
+    const allProducts = await searchProductHunt(criteria, category, 200);
     
     if (allProducts.length === 0) {
       return res.json({ 
@@ -282,6 +295,17 @@ app.post('/api/scan', async (req, res) => {
 
   } catch (error) {
     console.error('Scan error:', error);
+    
+    // Handle rate limiting errors
+    if (error.message?.startsWith('RATE_LIMIT:')) {
+      const minutes = error.message.split(':')[1];
+      return res.status(429).json({ 
+        error: 'Rate Limit Exceeded',
+        message: `Too many searches! Product Hunt's API rate limit has been reached. Please wait ${minutes} minutes and try again. Pro tip: Use category filters to reduce API calls.`,
+        retryAfter: parseInt(minutes) * 60
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to scan Product Hunt',
       message: error.message 

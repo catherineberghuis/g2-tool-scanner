@@ -238,7 +238,14 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to scan market');
+                    // Special handling for rate limit errors
+                    if (response.status === 429) {
+                        const minutes = Math.ceil((data.retryAfter || 600) / 60);
+                        showError(`⏱️ ${data.message || `Rate limit reached. Please wait ${minutes} minutes before trying again.`}`);
+                    } else {
+                        showError(data.message || data.error || 'Failed to scan market');
+                    }
+                    return;
                 }
 
                 if (data.results.length === 0) {
