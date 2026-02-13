@@ -19,7 +19,7 @@ async function searchProductHunt(criteria, category = null) {
   
   const query = `
     query {
-      posts(first: 100, order: VOTES${topicFilter}) {
+      posts(first: 150, order: VOTES${topicFilter}) {
         edges {
           node {
             id
@@ -31,13 +31,6 @@ async function searchProductHunt(criteria, category = null) {
             website
             thumbnail {
               url
-            }
-            topics {
-              edges {
-                node {
-                  name
-                }
-              }
             }
             reviewsRating
             reviewsCount
@@ -76,10 +69,7 @@ async function searchProductHunt(criteria, category = null) {
     
     const relevantPosts = posts.filter(post => {
       const searchText = `${post.name} ${post.tagline} ${post.description || ''}`.toLowerCase();
-      const topics = post.topics?.edges?.map(e => e.node.name.toLowerCase()).join(' ') || '';
-      const fullText = `${searchText} ${topics}`;
-      
-      return keywords.some(keyword => fullText.includes(keyword));
+      return keywords.some(keyword => searchText.includes(keyword));
     });
 
     console.log(`Filtered to ${relevantPosts.length} relevant products`);
@@ -105,25 +95,20 @@ function scoreProducts(products, criteria) {
     const name = (product.name || '').toLowerCase();
     const tagline = (product.tagline || '').toLowerCase();
     const description = (product.description || '').toLowerCase();
-    const topics = product.topics?.edges?.map(e => e.node.name.toLowerCase()).join(' ') || '';
     
     let relevanceScore = 0;
     let keywordMatches = 0;
     keywords.forEach(word => {
       if (name.includes(word)) {
-        relevanceScore += 50; // Increased from 40
+        relevanceScore += 50;
         keywordMatches++;
       }
       if (tagline.includes(word)) {
-        relevanceScore += 30; // Increased from 25
-        keywordMatches++;
-      }
-      if (topics.includes(word)) {
-        relevanceScore += 25; // Increased from 15
+        relevanceScore += 35; // Increased from 30 to compensate for removed topics
         keywordMatches++;
       }
       if (description.includes(word)) {
-        relevanceScore += 15; // Increased from 10
+        relevanceScore += 20; // Increased from 15
         keywordMatches++;
       }
     });
@@ -146,10 +131,10 @@ function scoreProducts(products, criteria) {
     // Calculate final score with relevance dominating
     const rawScore = relevanceScore + votesScore + reviewScore + ratingScore + popularityBonus;
     // Normalize to 0-100 scale
-    // Max relevance: ~120 per keyword * avg 3 keywords = ~360
+    // Max relevance: ~105 per keyword * avg 3 keywords = ~315
     // Max popularity: 15 + 10 + 10 + 5 = 40
-    // Max total: ~400
-    const totalScore = Math.min((rawScore / 400) * 100, 100);
+    // Max total: ~355
+    const totalScore = Math.min((rawScore / 355) * 100, 100);
     
     return {
       ...product,
@@ -196,13 +181,13 @@ function generateJustification(product, rank) {
 // API Endpoint
 app.post('/api/scan', async (req, res) => {
   try {
-    const { criteria, category } = req.body;
+    const { criteria, category, minReviews = 0, minRating = 0 } = req.body;
     
     if (!criteria || criteria.trim().length === 0) {
       return res.status(400).json({ error: 'Criteria is required' });
     }
 
-    console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''}`);
+    console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''} [Min Reviews: ${minReviews}, Min Rating: ${minRating}]`);
     
     // Search Product Hunt
     const allProducts = await searchProductHunt(criteria, category);
@@ -214,8 +199,22 @@ app.post('/api/scan', async (req, res) => {
       });
     }
 
+    // Apply quality filters
+    const filteredProducts = allProducts.filter(product => {
+      const reviewCount = product.reviewsCount || 0;
+      const rating = product.reviewsRating || 0;
+      return reviewCount >= minReviews && rating >= minRating;
+    });
+
+    if (filteredProducts.length === 0) {
+      return res.json({ 
+        results: [], 
+        message: `No products found matching your quality criteria (${minReviews}+ reviews, ${minRating}+ rating). Try lowering the filters.` 
+      });
+    }
+
     // Score and rank products
-    const rankedProducts = scoreProducts(allProducts, criteria);
+    const rankedProducts = scoreProducts(filteredProducts, criteria);
     
     // Get top 3
     const top3 = rankedProducts.slice(0, 3);
@@ -235,7 +234,6 @@ app.post('/api/scan', async (req, res) => {
         reviewCount: product.reviewsCount || 0,
         votesCount: product.votesCount || 0,
         imageUrl: product.thumbnail?.url || `https://via.placeholder.com/100?text=${encodeURIComponent(product.name.substring(0, 2))}`,
-        topics: product.topics?.edges?.map(e => e.node.name) || [],
         justification: justification
       };
     });
