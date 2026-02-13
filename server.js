@@ -155,7 +155,7 @@ app.post('/api/scan', async (req, res) => {
     console.log(`Scanning for: ${criteria}`);
     
     // Get all products and filter by criteria
-    const allProducts = await searchG2Products();
+    const allProducts = await searchG2Products(criteria);
     
     if (allProducts.length === 0) {
       return res.json({ results: [], message: 'No products found. Try different keywords.' });
