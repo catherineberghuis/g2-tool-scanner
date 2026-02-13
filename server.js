@@ -13,10 +13,13 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Product Hunt GraphQL query
-async function searchProductHunt(criteria) {
+async function searchProductHunt(criteria, category = null) {
+  // Build topic filter if category specified
+  const topicFilter = category ? `, topic: "${category}"` : '';
+  
   const query = `
     query {
-      posts(first: 500, order: VOTES) {
+      posts(first: 100, order: VOTES${topicFilter}) {
         edges {
           node {
             id
@@ -45,7 +48,7 @@ async function searchProductHunt(criteria) {
   `;
 
   try {
-    console.log(`Querying Product Hunt for: ${criteria}`);
+    console.log(`Querying Product Hunt for: ${criteria}${category ? ` in category: ${category}` : ''}`);
     
     const response = await axios.post(
       PRODUCT_HUNT_API,
@@ -193,16 +196,16 @@ function generateJustification(product, rank) {
 // API Endpoint
 app.post('/api/scan', async (req, res) => {
   try {
-    const { criteria } = req.body;
+    const { criteria, category } = req.body;
     
     if (!criteria || criteria.trim().length === 0) {
       return res.status(400).json({ error: 'Criteria is required' });
     }
 
-    console.log(`Scanning for: ${criteria}`);
+    console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''}`);
     
     // Search Product Hunt
-    const allProducts = await searchProductHunt(criteria);
+    const allProducts = await searchProductHunt(criteria, category);
     
     if (allProducts.length === 0) {
       return res.json({ 
