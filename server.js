@@ -16,7 +16,7 @@ app.use(express.static('public'));
 async function searchProductHunt(criteria) {
   const query = `
     query {
-      posts(first: 50, order: VOTES) {
+      posts(first: 500, order: VOTES) {
         edges {
           node {
             id
