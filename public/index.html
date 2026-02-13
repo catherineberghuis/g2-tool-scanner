@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>G2 Tool Scanner - Find Your Perfect Software</title>
+    <title>Product Hunt Market Scanner - Discover Top Tools</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes fadeIn {
@@ -35,10 +35,10 @@
         <!-- Header -->
         <div class="text-center mb-12">
             <h1 class="text-5xl font-bold text-gray-900 mb-4">
-                🤖 G2 Tool Scanner
+                🚀 Product Hunt Market Scanner
             </h1>
             <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-                Discover the top 3 software tools based on real G2 reviews, ratings, and user feedback
+                Discover the top 3 tools from Product Hunt based on community votes, ratings, and relevance
             </p>
         </div>
 
@@ -51,7 +51,7 @@
                 id="criteria"
                 rows="3"
                 class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring focus:ring-blue-200 transition resize-none"
-                placeholder="Examples:&#10;• CRM for small businesses&#10;• Project management with Gantt charts&#10;• Email marketing automation&#10;• Customer support ticketing system"
+                placeholder="Examples:&#10;• AI productivity tools&#10;• No-code website builders&#10;• Team collaboration software&#10;• Developer productivity tools"
             ></textarea>
             
             <button
@@ -80,6 +80,69 @@
         <div id="results" class="hidden space-y-6">
             <h2 class="text-3xl font-bold text-gray-900 mb-6">Top 3 Recommendations</h2>
             <div id="resultsContainer"></div>
+        </div>
+
+        <!-- Scoring Rationale Section -->
+        <div class="mt-16 bg-white rounded-2xl shadow-xl p-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">📊 How We Score Products</h2>
+            <p class="text-gray-600 mb-6">
+                Our algorithm analyzes multiple factors from Product Hunt to rank tools and provide you with the most relevant recommendations.
+            </p>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-orange-50 p-5 rounded-lg border-l-4 border-orange-500">
+                    <h3 class="font-bold text-gray-900 mb-2">🔍 Relevance Scoring (Up to 90 points)</h3>
+                    <ul class="text-sm text-gray-700 space-y-1">
+                        <li>• <strong>Product Name Match:</strong> +40 points per keyword</li>
+                        <li>• <strong>Tagline Match:</strong> +25 points per keyword</li>
+                        <li>• <strong>Topic/Category Match:</strong> +15 points per keyword</li>
+                        <li>• <strong>Description Match:</strong> +10 points per keyword</li>
+                    </ul>
+                </div>
+
+                <div class="bg-blue-50 p-5 rounded-lg border-l-4 border-blue-500">
+                    <h3 class="font-bold text-gray-900 mb-2">👍 Community Engagement (Up to 30 points)</h3>
+                    <ul class="text-sm text-gray-700 space-y-1">
+                        <li>• <strong>Upvotes:</strong> 1 point per 10 upvotes (capped at 30)</li>
+                        <li>• Products with 500+ upvotes get popularity bonus</li>
+                        <li>• Shows community trust and adoption</li>
+                    </ul>
+                </div>
+
+                <div class="bg-green-50 p-5 rounded-lg border-l-4 border-green-500">
+                    <h3 class="font-bold text-gray-900 mb-2">⭐ User Reviews (Up to 25 points)</h3>
+                    <ul class="text-sm text-gray-700 space-y-1">
+                        <li>• <strong>Review Count:</strong> 2 points per review (capped at 25)</li>
+                        <li>• More reviews indicate mature product</li>
+                        <li>• Validates real-world usage</li>
+                    </ul>
+                </div>
+
+                <div class="bg-purple-50 p-5 rounded-lg border-l-4 border-purple-500">
+                    <h3 class="font-bold text-gray-900 mb-2">🌟 Rating Quality (Up to 25 points)</h3>
+                    <ul class="text-sm text-gray-700 space-y-1">
+                        <li>• <strong>Star Rating:</strong> 5 points per star (1-5 scale)</li>
+                        <li>• Higher ratings indicate better satisfaction</li>
+                        <li>• Weighted with review count for accuracy</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-gray-100 p-5 rounded-lg">
+                <h3 class="font-bold text-gray-900 mb-2">🎯 Total Score Calculation</h3>
+                <p class="text-sm text-gray-700">
+                    <strong>Maximum Possible Score:</strong> ~170 points<br>
+                    The algorithm prioritizes <strong>relevance</strong> to your search criteria while balancing community validation 
+                    (upvotes, reviews, ratings). Products with higher relevance scores and strong community backing rank higher.
+                </p>
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-gray-200 text-center text-sm text-gray-600">
+                <p>
+                    💡 <strong>Pro Tip:</strong> Use specific keywords in your search (e.g., "AI writing assistant" vs. "writing tool") 
+                    for better relevance matching and more accurate results.
+                </p>
+            </div>
         </div>
     </div>
 
@@ -161,7 +224,8 @@
             card.className = 'bg-white rounded-xl shadow-lg p-6 hover:shadow-2xl transition-all duration-300 opacity-0';
             
             const medalEmoji = ['🥇', '🥈', '🥉'][result.rank - 1];
-            const stars = '⭐'.repeat(Math.round(result.rating));
+            const stars = result.rating > 0 ? '⭐'.repeat(Math.round(result.rating)) : '';
+            const upvotes = result.votesCount > 0 ? `👍 ${result.votesCount.toLocaleString()} upvotes` : '';
             
             card.innerHTML = `
                 <div class="flex items-start space-x-4">
@@ -169,19 +233,27 @@
                     <div class="flex-1">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-2xl font-bold text-gray-900">${escapeHtml(result.name)}</h3>
-                            <span class="bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full">
+                            <span class="bg-orange-100 text-orange-800 text-sm font-semibold px-3 py-1 rounded-full">
                                 Score: ${result.justification.score}
                             </span>
                         </div>
                         
+                        ${result.tagline ? `<p class="text-lg text-gray-600 italic mb-3">${escapeHtml(result.tagline)}</p>` : ''}
+                        
                         <div class="flex items-center space-x-4 mb-3">
-                            <div class="star-rating text-xl">${stars}</div>
-                            <span class="text-gray-600 font-medium">${result.rating}/5</span>
-                            <span class="text-gray-500">•</span>
-                            <span class="text-gray-600">${result.reviewCount.toLocaleString()} reviews</span>
+                            ${upvotes ? `<span class="text-orange-600 font-medium">${upvotes}</span>` : ''}
+                            ${result.rating > 0 ? `
+                                <span class="text-gray-500">•</span>
+                                <div class="star-rating text-xl">${stars}</div>
+                                <span class="text-gray-600 font-medium">${result.rating}/5</span>
+                            ` : ''}
+                            ${result.reviewCount > 0 ? `
+                                <span class="text-gray-500">•</span>
+                                <span class="text-gray-600">${result.reviewCount.toLocaleString()} reviews</span>
+                            ` : ''}
                         </div>
 
-                        <p class="text-gray-700 mb-4 line-clamp-2">${escapeHtml(result.description)}</p>
+                        ${result.description ? `<p class="text-gray-700 mb-4">${escapeHtml(result.description.substring(0, 200))}${result.description.length > 200 ? '...' : ''}</p>` : ''}
 
                         <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded">
                             <p class="text-sm font-semibold text-blue-900 mb-2">Why this ranks #${result.rank}:</p>
@@ -197,14 +269,26 @@
                             <p class="text-sm text-green-800 italic">"${escapeHtml(result.justification.highlight)}"</p>
                         </div>
 
-                        <a
-                            href="${escapeHtml(result.url)}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200"
-                        >
-                            View on G2 →
-                        </a>
+                        <div class="flex space-x-3">
+                            <a
+                                href="${escapeHtml(result.url)}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200"
+                            >
+                                View on Product Hunt →
+                            </a>
+                            ${result.website ? `
+                                <a
+                                    href="${escapeHtml(result.website)}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200"
+                                >
+                                    Visit Website →
+                                </a>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             `;

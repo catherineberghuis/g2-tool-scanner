@@ -1,127 +1,124 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Load G2 product URLs
-const G2_PRODUCTS = JSON.parse(fs.readFileSync(path.join(__dirname, 'g2-products-links.json'), 'utf8'));
+const PRODUCT_HUNT_TOKEN = process.env.PRODUCT_HUNT_TOKEN;
+const PRODUCT_HUNT_API = 'https://api.producthunt.com/v2/api/graphql';
 
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
 
-// Scrape G2 product page
-async function scrapeG2Product(url) {
-  try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+// Product Hunt GraphQL query
+async function searchProductHunt(criteria) {
+  const query = `
+    query {
+      posts(first: 50, order: VOTES) {
+        edges {
+          node {
+            id
+            name
+            tagline
+            description
+            votesCount
+            url
+            website
+            thumbnail {
+              url
+            }
+            topics {
+              edges {
+                node {
+                  name
+                }
+              }
+            }
+            reviewsRating
+            reviewsCount
+          }
+        }
       }
-    });
-    
-    const $ = cheerio.load(response.data);
-    const slug = url.split('/products/')[1]?.split('/')[0];
-    
-    // Extract product data from page
-    const name = $('h1[itemprop="name"]').first().text().trim() || 
-                 $('h1').first().text().trim() ||
-                 slug?.replace(/-/g, ' ');
-    
-    const description = $('meta[name="description"]').attr('content') || 
-                       $('p[itemprop="description"]').first().text().trim() ||
-                       'No description available';
-    
-    const ratingText = $('[class*="stars"]').first().text() || 
-                      $('[data-rating]').first().attr('data-rating') ||
-                      '4.0';
-    const starRating = parseFloat(ratingText) || 4.0;
-    
-    const reviewText = $('[class*="review"]').text().match(/(\d{1,},?\d{0,})\s*(review|rating)/i);
-    const reviewCount = reviewText ? parseInt(reviewText[1].replace(/,/g, '')) : Math.floor(Math.random() * 500) + 50;
-    
-    return {
-      id: slug,
-      name: name,
-      slug: slug,
-      starRating: starRating,
-      avgRating: starRating * 2, // Convert to 0-10 scale
-      reviewCount: reviewCount,
-      description: description.substring(0, 300),
-      url: url,
-      imageUrl: `https://via.placeholder.com/100?text=${encodeURIComponent(name.substring(0, 2))}`
-    };
-  } catch (error) {
-    console.error(`Failed to scrape ${url}:`, error.message);
-    return null;
-  }
-}
-
-// Search G2 products from local list
-async function searchG2Products(criteria) {
-  try {
-    console.log(`Searching ${G2_PRODUCTS.length} products for: ${criteria}`);
-    const criteriaLower = criteria.toLowerCase();
-    const keywords = criteriaLower.split(' ').filter(w => w.length > 3);
-    
-    // Filter URLs that likely match criteria
-    const matchingUrls = G2_PRODUCTS.filter(url => {
-      const urlLower = url.toLowerCase();
-      return keywords.some(keyword => urlLower.includes(keyword));
-    }).slice(0, 20); // Limit to 20 for scraping
-    
-    console.log(`Found ${matchingUrls.length} potential matches, scraping...`);
-    
-    // Scrape matching products (with delay to avoid rate limiting)
-    const products = [];
-    for (const url of matchingUrls) {
-      const product = await scrapeG2Product(url);
-      if (product) {
-        products.push(product);
-        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between requests
-      }
-      if (products.length >= 10) break; // Stop after 10 successful scrapes
     }
+  `;
+
+  try {
+    console.log(`Querying Product Hunt for: ${criteria}`);
     
-    console.log(`Successfully scraped ${products.length} products`);
-    return products;
+    const response = await axios.post(
+      PRODUCT_HUNT_API,
+      { query },
+      {
+        headers: {
+          'Authorization': `Bearer ${PRODUCT_HUNT_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    if (response.data.errors) {
+      console.error('GraphQL errors:', response.data.errors);
+      throw new Error(response.data.errors[0].message);
+    }
+
+    const posts = response.data.data.posts.edges.map(edge => edge.node);
+    console.log(`Found ${posts.length} products from Product Hunt`);
+    
+    // Filter by criteria relevance
+    const criteriaLower = criteria.toLowerCase();
+    const keywords = criteriaLower.split(' ').filter(w => w.length > 2);
+    
+    const relevantPosts = posts.filter(post => {
+      const searchText = `${post.name} ${post.tagline} ${post.description || ''}`.toLowerCase();
+      const topics = post.topics?.edges?.map(e => e.node.name.toLowerCase()).join(' ') || '';
+      const fullText = `${searchText} ${topics}`;
+      
+      return keywords.some(keyword => fullText.includes(keyword));
+    });
+
+    console.log(`Filtered to ${relevantPosts.length} relevant products`);
+    return relevantPosts;
+
   } catch (error) {
-    console.error('Search error:', error.message);
+    console.error('Product Hunt API error:', error.response?.data || error.message);
     throw error;
   }
 }
 
-
 // Ranking algorithm
 function scoreProducts(products, criteria) {
+  const criteriaLower = criteria.toLowerCase();
+  const keywords = criteriaLower.split(' ').filter(w => w.length > 2);
+
   return products.map(product => {
-    const starRating = product.starRating || 0;
-    const reviewCount = product.reviewCount || 0;
-    const avgRating = product.avgRating || 0;
+    const votesCount = product.votesCount || 0;
+    const reviewsCount = product.reviewsCount || 0;
+    const reviewsRating = product.reviewsRating || 0;
     
-    // Check if product name/description matches criteria
+    // Relevance scoring
     const name = (product.name || '').toLowerCase();
+    const tagline = (product.tagline || '').toLowerCase();
     const description = (product.description || '').toLowerCase();
-    const criteriaLower = criteria.toLowerCase();
-    const criteriaWords = criteriaLower.split(' ').filter(w => w.length > 3);
+    const topics = product.topics?.edges?.map(e => e.node.name.toLowerCase()).join(' ') || '';
     
     let relevanceScore = 0;
-    criteriaWords.forEach(word => {
-      if (name.includes(word)) relevanceScore += 30;
+    keywords.forEach(word => {
+      if (name.includes(word)) relevanceScore += 40;
+      if (tagline.includes(word)) relevanceScore += 25;
       if (description.includes(word)) relevanceScore += 10;
+      if (topics.includes(word)) relevanceScore += 15;
     });
     
     // Scoring weights
-    const ratingScore = starRating * 20; // 0-100
-    const reviewScore = Math.min(reviewCount / 10, 30); // Cap at 30
-    const avgScore = avgRating * 3; // 0-30
-    const popularityBonus = reviewCount > 100 ? 20 : reviewCount > 50 ? 10 : 0;
+    const votesScore = Math.min(votesCount / 10, 30); // Cap at 30
+    const reviewScore = reviewsCount > 0 ? Math.min(reviewsCount * 2, 25) : 0;
+    const ratingScore = reviewsRating > 0 ? reviewsRating * 5 : 0; // Assuming 1-5 scale
+    const popularityBonus = votesCount > 500 ? 20 : votesCount > 200 ? 10 : 0;
     
-    const totalScore = ratingScore + reviewScore + avgScore + popularityBonus + relevanceScore;
+    const totalScore = votesScore + reviewScore + ratingScore + popularityBonus + relevanceScore;
     
     return {
       ...product,
@@ -131,16 +128,37 @@ function scoreProducts(products, criteria) {
   }).sort((a, b) => b.score - a.score);
 }
 
-async function getTopReviewHighlight(product) {
-  // For scraped data, generate a generic highlight
-  const highlights = [
-    `Users praise ${product.name} for its ease of use and powerful features.`,
-    `Highly recommended for teams looking for ${product.name.split(' ').slice(-1)[0].toLowerCase()} solutions.`,
-    `${product.name} delivers excellent value with strong customer support.`,
-    `Users appreciate the intuitive interface and robust functionality.`,
-    `Great tool that saves time and improves productivity.`
-  ];
-  return highlights[Math.floor(Math.random() * highlights.length)];
+// Generate justification
+function generateJustification(product, rank) {
+  const reasons = [];
+  
+  if (product.votesCount > 0) {
+    reasons.push(`${product.votesCount.toLocaleString()} upvotes from Product Hunt community`);
+  }
+  
+  if (product.reviewsCount > 0 && product.reviewsRating > 0) {
+    reasons.push(`${product.reviewsRating}/5 rating from ${product.reviewsCount} reviews`);
+  } else if (product.reviewsCount > 0) {
+    reasons.push(`${product.reviewsCount} user reviews`);
+  }
+  
+  if (product.votesCount > 500) {
+    reasons.push('Highly popular choice in the community');
+  } else if (product.votesCount > 200) {
+    reasons.push('Well-regarded by users');
+  } else {
+    reasons.push('Trusted by early adopters');
+  }
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const highlight = product.tagline || product.description?.substring(0, 150) || 'Innovative solution for your needs.';
+
+  return {
+    score: Math.round(product.score),
+    highlight: highlight,
+    reasons: reasons,
+    medal: medals[rank - 1] || ''
+  };
 }
 
 // API Endpoint
@@ -154,58 +172,48 @@ app.post('/api/scan', async (req, res) => {
 
     console.log(`Scanning for: ${criteria}`);
     
-    // Get all products and filter by criteria
-    const allProducts = await searchG2Products(criteria);
+    // Search Product Hunt
+    const allProducts = await searchProductHunt(criteria);
     
     if (allProducts.length === 0) {
-      return res.json({ results: [], message: 'No products found. Try different keywords.' });
+      return res.json({ 
+        results: [], 
+        message: 'No products found on Product Hunt. Try different keywords.' 
+      });
     }
 
-    // Score and rank products with criteria matching
+    // Score and rank products
     const rankedProducts = scoreProducts(allProducts, criteria);
     
-    // Filter to only relevant products (has reviews)
-    const relevantProducts = rankedProducts.filter(p => p.reviewCount > 0);
-    
-    if (relevantProducts.length === 0) {
-      return res.json({ results: [], message: 'No matching products with reviews found.' });
-    }
-    
-    const top3 = relevantProducts.slice(0, 3);
+    // Get top 3
+    const top3 = rankedProducts.slice(0, 3);
 
-    // Get review highlights for top 3
-    const resultsWithHighlights = await Promise.all(
-      top3.map(async (product, index) => {
-        const highlight = await getTopReviewHighlight(product);
-        
-        return {
-          rank: index + 1,
-          name: product.name,
-          url: product.url,
-          rating: product.starRating,
-          avgRating: product.avgRating,
-          reviewCount: product.reviewCount,
-          description: product.description,
-          imageUrl: product.imageUrl,
-          justification: {
-            score: Math.round(product.score),
-            highlight: highlight,
-            reasons: [
-              `${product.starRating}/5 star rating from ${product.reviewCount} reviews`,
-              `Average rating: ${product.avgRating.toFixed(1)}/10`,
-              product.reviewCount > 100 ? 'Highly popular choice' : 'Trusted by users'
-            ]
-          }
-        };
-      })
-    );
+    // Format results
+    const results = top3.map((product, index) => {
+      const justification = generateJustification(product, index + 1);
+      
+      return {
+        rank: index + 1,
+        name: product.name,
+        url: product.url,
+        website: product.website,
+        tagline: product.tagline,
+        description: product.description,
+        rating: product.reviewsRating || 0,
+        reviewCount: product.reviewsCount || 0,
+        votesCount: product.votesCount || 0,
+        imageUrl: product.thumbnail?.url || `https://via.placeholder.com/100?text=${encodeURIComponent(product.name.substring(0, 2))}`,
+        topics: product.topics?.edges?.map(e => e.node.name) || [],
+        justification: justification
+      };
+    });
 
-    res.json({ results: resultsWithHighlights });
+    res.json({ results });
 
   } catch (error) {
     console.error('Scan error:', error);
     res.status(500).json({ 
-      error: 'Failed to scan G2 marketplace',
+      error: 'Failed to scan Product Hunt',
       message: error.message 
     });
   }
@@ -213,7 +221,11 @@ app.post('/api/scan', async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    service: 'Product Hunt Market Scanner'
+  });
 });
 
 // Serve frontend
@@ -222,6 +234,6 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🤖 G2 Tool Scanner running on port ${PORT}`);
+  console.log(`🤖 Product Hunt Market Scanner running on port ${PORT}`);
   console.log(`🌐 Open http://localhost:${PORT}`);
 });
