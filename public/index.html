@@ -98,39 +98,40 @@
             
             <div class="grid md:grid-cols-2 gap-6">
                 <div class="bg-orange-50 p-5 rounded-lg border-l-4 border-orange-500">
-                    <h3 class="font-bold text-gray-900 mb-2">🔍 Relevance Scoring (Up to 90 points)</h3>
+                    <h3 class="font-bold text-gray-900 mb-2">🎯 Relevance Scoring (PRIMARY - Up to ~360 points)</h3>
                     <ul class="text-sm text-gray-700 space-y-1">
-                        <li>• <strong>Product Name Match:</strong> +40 points per keyword</li>
-                        <li>• <strong>Tagline Match:</strong> +25 points per keyword</li>
-                        <li>• <strong>Topic/Category Match:</strong> +15 points per keyword</li>
-                        <li>• <strong>Description Match:</strong> +10 points per keyword</li>
+                        <li>• <strong>Product Name Match:</strong> +50 points per keyword</li>
+                        <li>• <strong>Tagline Match:</strong> +30 points per keyword</li>
+                        <li>• <strong>Topic/Category Match:</strong> +25 points per keyword</li>
+                        <li>• <strong>Description Match:</strong> +15 points per keyword</li>
+                        <li>• <strong>Products with zero relevance are filtered out</strong></li>
                     </ul>
                 </div>
 
                 <div class="bg-blue-50 p-5 rounded-lg border-l-4 border-blue-500">
-                    <h3 class="font-bold text-gray-900 mb-2">👍 Community Engagement (Up to 30 points)</h3>
+                    <h3 class="font-bold text-gray-900 mb-2">👍 Community Engagement (Up to 15 points)</h3>
                     <ul class="text-sm text-gray-700 space-y-1">
-                        <li>• <strong>Upvotes:</strong> 1 point per 10 upvotes (capped at 30)</li>
-                        <li>• Products with 500+ upvotes get popularity bonus</li>
-                        <li>• Shows community trust and adoption</li>
+                        <li>• <strong>Upvotes:</strong> 1 point per 50 upvotes (capped at 15)</li>
+                        <li>• Products with 1000+ upvotes get +5 bonus</li>
+                        <li>• Secondary factor after relevance</li>
                     </ul>
                 </div>
 
                 <div class="bg-green-50 p-5 rounded-lg border-l-4 border-green-500">
-                    <h3 class="font-bold text-gray-900 mb-2">⭐ User Reviews (Up to 25 points)</h3>
+                    <h3 class="font-bold text-gray-900 mb-2">⭐ User Reviews (Up to 10 points)</h3>
                     <ul class="text-sm text-gray-700 space-y-1">
-                        <li>• <strong>Review Count:</strong> 2 points per review (capped at 25)</li>
-                        <li>• More reviews indicate mature product</li>
+                        <li>• <strong>Review Count:</strong> 1 point per review (capped at 10)</li>
                         <li>• Validates real-world usage</li>
+                        <li>• Secondary validation factor</li>
                     </ul>
                 </div>
 
                 <div class="bg-purple-50 p-5 rounded-lg border-l-4 border-purple-500">
-                    <h3 class="font-bold text-gray-900 mb-2">🌟 Rating Quality (Up to 25 points)</h3>
+                    <h3 class="font-bold text-gray-900 mb-2">🌟 Rating Quality (Up to 10 points)</h3>
                     <ul class="text-sm text-gray-700 space-y-1">
-                        <li>• <strong>Star Rating:</strong> 5 points per star (1-5 scale)</li>
-                        <li>• Higher ratings indicate better satisfaction</li>
-                        <li>• Weighted with review count for accuracy</li>
+                        <li>• <strong>Star Rating:</strong> 2 points per star (1-5 scale)</li>
+                        <li>• Indicates user satisfaction</li>
+                        <li>• Tiebreaker for similar relevance scores</li>
                     </ul>
                 </div>
             </div>
@@ -139,9 +140,10 @@
                 <h3 class="font-bold text-gray-900 mb-2">🎯 Total Score Calculation</h3>
                 <p class="text-sm text-gray-700">
                     <strong>Score Scale:</strong> 0-100 points (normalized)<br>
-                    The algorithm prioritizes <strong>relevance</strong> to your search criteria while balancing community validation 
-                    (upvotes, reviews, ratings). Products with higher relevance scores and strong community backing rank higher. 
-                    Raw scores are normalized to a 0-100 scale for easier comparison.
+                    <strong>Algorithm Priority:</strong> Relevance >>> Popularity<br><br>
+                    The algorithm <strong>heavily prioritizes relevance</strong> to your search criteria (~90% of score). 
+                    Community metrics (upvotes, reviews, ratings) serve as tiebreakers between similarly relevant products. 
+                    Products with zero keyword matches are automatically filtered out.
                 </p>
             </div>
 

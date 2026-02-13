@@ -98,36 +98,63 @@ function scoreProducts(products, criteria) {
     const reviewsCount = product.reviewsCount || 0;
     const reviewsRating = product.reviewsRating || 0;
     
-    // Relevance scoring
+    // Relevance scoring (HEAVILY WEIGHTED)
     const name = (product.name || '').toLowerCase();
     const tagline = (product.tagline || '').toLowerCase();
     const description = (product.description || '').toLowerCase();
     const topics = product.topics?.edges?.map(e => e.node.name.toLowerCase()).join(' ') || '';
     
     let relevanceScore = 0;
+    let keywordMatches = 0;
     keywords.forEach(word => {
-      if (name.includes(word)) relevanceScore += 40;
-      if (tagline.includes(word)) relevanceScore += 25;
-      if (description.includes(word)) relevanceScore += 10;
-      if (topics.includes(word)) relevanceScore += 15;
+      if (name.includes(word)) {
+        relevanceScore += 50; // Increased from 40
+        keywordMatches++;
+      }
+      if (tagline.includes(word)) {
+        relevanceScore += 30; // Increased from 25
+        keywordMatches++;
+      }
+      if (topics.includes(word)) {
+        relevanceScore += 25; // Increased from 15
+        keywordMatches++;
+      }
+      if (description.includes(word)) {
+        relevanceScore += 15; // Increased from 10
+        keywordMatches++;
+      }
     });
     
-    // Scoring weights (normalized to 0-100 scale)
-    const votesScore = Math.min(votesCount / 10, 30); // Cap at 30
-    const reviewScore = reviewsCount > 0 ? Math.min(reviewsCount * 2, 25) : 0;
-    const ratingScore = reviewsRating > 0 ? reviewsRating * 5 : 0; // Assuming 1-5 scale
-    const popularityBonus = votesCount > 500 ? 20 : votesCount > 200 ? 10 : 0;
+    // Require minimum relevance - filter out products with no keyword matches
+    if (relevanceScore === 0) {
+      return {
+        ...product,
+        score: 0,
+        relevanceScore: 0
+      };
+    }
     
-    const rawScore = votesScore + reviewScore + ratingScore + popularityBonus + relevanceScore;
-    // Normalize to 0-100 scale (max possible raw score is ~170)
-    const totalScore = Math.min((rawScore / 170) * 100, 100);
+    // Popularity metrics (REDUCED WEIGHT)
+    const votesScore = Math.min(votesCount / 50, 15); // Reduced from /10, cap 15 (was 30)
+    const reviewScore = reviewsCount > 0 ? Math.min(reviewsCount, 10) : 0; // Reduced cap to 10 (was 25)
+    const ratingScore = reviewsRating > 0 ? reviewsRating * 2 : 0; // Reduced from *5 to *2 (max 10 instead of 25)
+    const popularityBonus = votesCount > 1000 ? 5 : 0; // Reduced from 20/10 to 5
+    
+    // Calculate final score with relevance dominating
+    const rawScore = relevanceScore + votesScore + reviewScore + ratingScore + popularityBonus;
+    // Normalize to 0-100 scale
+    // Max relevance: ~120 per keyword * avg 3 keywords = ~360
+    // Max popularity: 15 + 10 + 10 + 5 = 40
+    // Max total: ~400
+    const totalScore = Math.min((rawScore / 400) * 100, 100);
     
     return {
       ...product,
       score: totalScore,
-      relevanceScore: relevanceScore
+      relevanceScore: relevanceScore,
+      keywordMatches: keywordMatches
     };
-  }).sort((a, b) => b.score - a.score);
+  }).filter(p => p.relevanceScore > 0).sort((a, b) => b.score - a.score);
 }
 
 // Generate justification
