@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G2 Tool Scanner - Find Your Perfect Software</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+        .star-rating {
+            color: #fbbf24;
+        }
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-bold text-gray-900 mb-4">
+                🤖 G2 Tool Scanner
+            </h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                Discover the top 3 software tools based on real G2 reviews, ratings, and user feedback
+            </p>
+        </div>
+
+        <!-- Search Section -->
+        <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            <label for="criteria" class="block text-lg font-semibold text-gray-700 mb-3">
+                What tool are you looking for?
+            </label>
+            <textarea
+                id="criteria"
+                rows="3"
+                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring focus:ring-blue-200 transition resize-none"
+                placeholder="Examples:&#10;• CRM for small businesses&#10;• Project management with Gantt charts&#10;• Email marketing automation&#10;• Customer support ticketing system"
+            ></textarea>
+            
+            <button
+                id="scanBtn"
+                onclick="scanMarket()"
+                class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition duration-200 flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+                <span id="btnText">🔍 Scan Market</span>
+                <div id="btnSpinner" class="spinner hidden"></div>
+            </button>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMsg" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-lg">
+            <p class="font-bold">Error</p>
+            <p id="errorText"></p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-16">
+            <div class="text-6xl mb-4">📊</div>
+            <p class="text-xl text-gray-500">Enter your criteria and click "Scan Market" to discover tools</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="hidden space-y-6">
+            <h2 class="text-3xl font-bold text-gray-900 mb-6">Top 3 Recommendations</h2>
+            <div id="resultsContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        let isLoading = false;
+
+        async function scanMarket() {
+            if (isLoading) return;
+
+            const criteria = document.getElementById('criteria').value.trim();
+            
+            if (!criteria) {
+                showError('Please enter your criteria');
+                return;
+            }
+
+            // UI State: Loading
+            isLoading = true;
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('btnText').textContent = 'Scanning...';
+            document.getElementById('btnSpinner').classList.remove('hidden');
+            document.getElementById('errorMsg').classList.add('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('results').classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ criteria })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to scan market');
+                }
+
+                if (data.results.length === 0) {
+                    showError(data.message || 'No products found matching your criteria');
+                    return;
+                }
+
+                displayResults(data.results);
+
+            } catch (error) {
+                console.error('Scan error:', error);
+                showError(error.message);
+            } finally {
+                // UI State: Reset
+                isLoading = false;
+                document.getElementById('scanBtn').disabled = false;
+                document.getElementById('btnText').textContent = '🔍 Scan Market';
+                document.getElementById('btnSpinner').classList.add('hidden');
+            }
+        }
+
+        function displayResults(results) {
+            const container = document.getElementById('resultsContainer');
+            container.innerHTML = '';
+
+            results.forEach((result, index) => {
+                const card = createResultCard(result);
+                container.appendChild(card);
+                
+                // Stagger animations
+                setTimeout(() => {
+                    card.classList.add('fade-in');
+                }, index * 150);
+            });
+
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function createResultCard(result) {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg p-6 hover:shadow-2xl transition-all duration-300 opacity-0';
+            
+            const medalEmoji = ['🥇', '🥈', '🥉'][result.rank - 1];
+            const stars = '⭐'.repeat(Math.round(result.rating));
+            
+            card.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="text-4xl">${medalEmoji}</div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-2xl font-bold text-gray-900">${escapeHtml(result.name)}</h3>
+                            <span class="bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full">
+                                Score: ${result.justification.score}
+                            </span>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4 mb-3">
+                            <div class="star-rating text-xl">${stars}</div>
+                            <span class="text-gray-600 font-medium">${result.rating}/5</span>
+                            <span class="text-gray-500">•</span>
+                            <span class="text-gray-600">${result.reviewCount.toLocaleString()} reviews</span>
+                        </div>
+
+                        <p class="text-gray-700 mb-4 line-clamp-2">${escapeHtml(result.description)}</p>
+
+                        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded">
+                            <p class="text-sm font-semibold text-blue-900 mb-2">Why this ranks #${result.rank}:</p>
+                            <ul class="text-sm text-blue-800 space-y-1">
+                                ${result.justification.reasons.map(reason => 
+                                    `<li>• ${escapeHtml(reason)}</li>`
+                                ).join('')}
+                            </ul>
+                        </div>
+
+                        <div class="bg-green-50 p-4 rounded-lg mb-4">
+                            <p class="text-sm font-semibold text-green-900 mb-1">User Highlight:</p>
+                            <p class="text-sm text-green-800 italic">"${escapeHtml(result.justification.highlight)}"</p>
+                        </div>
+
+                        <a
+                            href="${escapeHtml(result.url)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200"
+                        >
+                            View on G2 →
+                        </a>
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMsg').classList.remove('hidden');
+            document.getElementById('emptyState').classList.remove('hidden');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Enter key support
+        document.getElementById('criteria').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                scanMarket();
+            }
+        });
+    </script>
+</body>
+</html>
