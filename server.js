@@ -13,24 +13,26 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Product Hunt GraphQL query with pagination
-async function searchProductHunt(criteria, category = null, maxProducts = 500) {
+async function searchProductHunt(criteria, category = null, maxProducts = 300) {
   // Build topic filter if category specified
   const topicFilter = category ? `, topic: "${category}"` : '';
   
   let allPosts = [];
   let hasNextPage = true;
   let afterCursor = null;
+  let batchCount = 0;
+  const maxBatches = 15; // Max 15 batches of 20 = 300 products
   
   try {
     console.log(`Querying Product Hunt for: ${criteria}${category ? ` in category: ${category}` : ''}`);
     
-    // Fetch products in batches of 150 (safe complexity limit)
-    while (hasNextPage && allPosts.length < maxProducts) {
+    // Fetch products in batches (API limits to ~20 per request)
+    while (hasNextPage && allPosts.length < maxProducts && batchCount < maxBatches) {
       const afterParam = afterCursor ? `, after: "${afterCursor}"` : '';
       
       const query = `
         query {
-          posts(first: 150, order: VOTES${topicFilter}${afterParam}) {
+          posts(first: 20, order: VOTES${topicFilter}${afterParam}) {
             edges {
               cursor
               node {
@@ -77,27 +79,42 @@ async function searchProductHunt(criteria, category = null, maxProducts = 500) {
       const newPosts = postsData.edges.map(edge => edge.node);
       allPosts = allPosts.concat(newPosts);
       
-      hasNextPage = postsData.pageInfo.hasNextPage && allPosts.length < maxProducts;
+      hasNextPage = postsData.pageInfo.hasNextPage;
       afterCursor = postsData.pageInfo.endCursor;
+      batchCount++;
       
-      console.log(`Fetched ${newPosts.length} products (total: ${allPosts.length})`);
+      console.log(`Batch ${batchCount}: Fetched ${newPosts.length} products (total: ${allPosts.length})`);
       
-      // Stop if we got less than 150 (end of results)
-      if (newPosts.length < 150) break;
+      // Stop if no more products in this batch
+      if (newPosts.length === 0) break;
     }
     
-    console.log(`Total products fetched: ${allPosts.length}`);
+    console.log(`Total products fetched: ${allPosts.length} from ${batchCount} batches`);
     
-    // Filter by criteria relevance
+    // Filter by criteria relevance (relaxed - OR logic, any keyword match)
     const criteriaLower = criteria.toLowerCase();
     const keywords = criteriaLower.split(' ').filter(w => w.length > 2);
     
+    // If no meaningful keywords, return all (rely on category filter)
+    if (keywords.length === 0) {
+      console.log('No keywords to filter by, returning all products');
+      return allPosts;
+    }
+    
     const relevantPosts = allPosts.filter(post => {
       const searchText = `${post.name} ${post.tagline} ${post.description || ''}`.toLowerCase();
+      // Match if ANY keyword is found (relaxed filtering)
       return keywords.some(keyword => searchText.includes(keyword));
     });
 
-    console.log(`Filtered to ${relevantPosts.length} relevant products`);
+    console.log(`Filtered to ${relevantPosts.length} relevant products (${keywords.length} keywords)`);
+    
+    // If filtering removes everything, return top products anyway
+    if (relevantPosts.length === 0 && allPosts.length > 0) {
+      console.log('No keyword matches, returning all fetched products');
+      return allPosts;
+    }
+    
     return relevantPosts;
 
   } catch (error) {
@@ -214,8 +231,8 @@ app.post('/api/scan', async (req, res) => {
 
     console.log(`Scanning for: ${criteria}${category ? ` [Category: ${category}]` : ''} [Min Rating: ${minRating}]`);
     
-    // Search Product Hunt (fetches up to 500 products via pagination)
-    const allProducts = await searchProductHunt(criteria, category, 500);
+    // Search Product Hunt (fetches up to 300 products via pagination)
+    const allProducts = await searchProductHunt(criteria, category, 300);
     
     if (allProducts.length === 0) {
       return res.json({ 
